@@ -1,0 +1,36 @@
+// tbdetection_framework
+digraph {
+	a [label="检测框架"]
+	b [label="数据部分"]
+	c [label="检测部分"]
+	d [label="特效库"]
+	e [label="融合方法"]
+	f [label="批量生成api"]
+	g [label="训练格式转换"]
+	p [label=dataset]
+	q [label="mosaic,grid, et al."]
+	h [label=backbone]
+	i [label=neck]
+	j [label=head]
+	k [label=detector]
+	l [label="res,csp"]
+	m [label="fpn,panet"]
+	n [label="refinedet,retina"]
+	o [label="refinedet,retina"]
+	a -> b
+	a -> c
+	b -> d
+	b -> e
+	b -> f
+	b -> g
+	c -> p
+	c -> h
+	c -> i
+	c -> j
+	c -> k
+	h -> l
+	i -> m
+	j -> n
+	k -> o
+	p -> q
+}
