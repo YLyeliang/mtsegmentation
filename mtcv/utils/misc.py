@@ -1,6 +1,6 @@
 import itertools
 from collections import abc
-from time import time
+import time
 
 
 def is_str(x):

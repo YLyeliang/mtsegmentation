@@ -15,8 +15,8 @@ def draw_circle(img, center, radius, color=(0, 255, 0), thick=1):
     return draw
 
 
-def draw_arrow(img, start, end, color=(0, 255, 0), thick=1):
-    draw = cv2.arrowedLine(img, start, end, color, thickness=thick)
+def draw_arrow(img, start, end, color=(0, 255, 0), thick=1, line_type=None, tipLength=0.3):
+    draw = cv2.arrowedLine(img, start, end, color, thickness=thick, line_type=line_type, tipLength=tipLength)
     return draw
 
 
@@ -37,3 +37,4 @@ def draw_contour(img, contours, ct_id, color=(0, 255, 0), thick=1):
 
 def polylines(img, points, isClosed=False, color=(0, 255, 0), thick=1):
     draw = cv2.polylines(img, points, isClosed, color, thickness=thick)
+    return draw

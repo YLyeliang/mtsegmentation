@@ -7,8 +7,10 @@ import mtcv
 from .base_runner import BaseRunner
 from .utils import get_host_info
 from .checkpoint import save_checkpoint
+from .builder import RUNNERS
 
 
+@RUNNERS.register_module()
 class EpochBasedRunner(BaseRunner):
     """Epoch-based Runner.
 
