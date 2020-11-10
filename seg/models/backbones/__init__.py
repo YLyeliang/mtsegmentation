@@ -2,7 +2,8 @@
 # @Time : 2020/11/4 3:31 下午 
 # @Author : yl
 from .resnet import ResNet, ResNetV1c, ResNetV1d
+from .hrnet import HRNet
 
 __all__ = [
-    'ResNet', 'ResNetV1c', 'ResNetV1d'
+    'ResNet', 'ResNetV1c', 'ResNetV1d', 'HRNet'
 ]

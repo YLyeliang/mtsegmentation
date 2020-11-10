@@ -1,6 +1,6 @@
 import torch.nn as nn
 import torch.nn.functional as F
-from mmcv.cnn import ConvModule, xavier_init
+from mtcv.cnn import ConvModule, xavier_init
 
 from ..builder import NECKS
 

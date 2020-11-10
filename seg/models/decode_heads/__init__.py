@@ -3,7 +3,8 @@
 # @Author : yl
 
 from .fcn_head import FCNHead
+from .aspp_head import ASPPHead
 
 __all__ = [
-    'FCNHead'
+    'FCNHead', 'ASPPHead'
 ]
