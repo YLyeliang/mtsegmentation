@@ -5,7 +5,7 @@ import os
 import cv2
 import numpy as np
 from mtcv.image.draw import draw_circle, draw_arrow, draw_contour, draw_ellipse
-from .utils import random_color, random_circle, random_arrow
+from .utils import random_color, random_circle, random_arrow, piecewiseAffineTrans, generate_arrow
 from mtcv.utils.misc import tictok
 import os.path as osp
 from mtcv import mkdir_or_exist
@@ -143,6 +143,7 @@ def rand_paint(img, out_img=None, out_annot=None):
     mask = np.zeros((h, w), dtype=np.uint8)
     center, radius, thick, contours = random_circle(h, w, return_axis=True)
     start, end, arrow_thick = random_arrow(h, w, center=center, radius=radius)
+
     # circle = draw_circle(image, center, radius, thick=thick)
     circle = draw_contour(image, contours, 0, thick=thick)
     circle = draw_arrow(circle, start, end, thick=arrow_thick)
