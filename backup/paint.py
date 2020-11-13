@@ -72,38 +72,16 @@ class DataPaint(object):
         paint_id = self.class_id['paint']
         h, w, _ = image.shape
         mask = np.zeros((h, w), dtype=np.uint8)
-        mask_cp = mask.copy()
         center, radius, thick, contours = random_circle(h, w, return_axis=True)
         start, end, arrow_thick = random_arrow(h, w, center=center, radius=radius)
-
-        image = draw_contour(image, contours, 0, thick=thick)
-        mask = draw_contour(mask, contours, 0, color=paint_id, thick=thick)
-
-        mask_cp = draw_arrow(mask_cp, start, end, color=128, thick=arrow_thick)
-        idxs = np.where(mask_cp > 0)
-        xmin, ymin = min(idxs[1]), min(idxs[0])
-        xmax, ymax = max(idxs[1]), max(idxs[0])
-
-        crop_arrow = mask_cp[ymin:ymax, xmin:xmax]
-        crop_arrow = Image.fromarray(crop_arrow)
-        direction = np.random.randint(0, 2)
-        crop_arrow = piecewiseAffineTrans(crop_arrow, direction=direction)
-
-        y_id, x_id = np.where(crop_arrow > np.max(crop_arrow) - 30)
-        arrow_h, arrow_w = crop_arrow.shape
-        arrow = np.zeros_like(crop_arrow, shape=[arrow_h, arrow_w, 3])
-        arrow[(y_id, x_id)] = color
-
-        img_y, img_x = np.clip(y_id + ymin, 0, h - 1), np.clip(x_id + xmin, 0, w - 1)
-
-        opacity = np.random.uniform(0.5, 1)
-        # image[ymin:ymax, xmin:xmax] = opacity * crop_arrow + (1 - opacity) * image[ymin:ymax, xmin:xmax]
-        image[(img_y, img_x)] = opacity * arrow[(y_id, x_id)] + (1 - opacity) * image[(img_y, img_x)]
-        mask[(img_y, img_x)] = paint_id
+        circle = draw_contour(image, contours, 0, color=color, thick=thick)
+        circle = draw_arrow(circle, start, end, color=color, thick=arrow_thick)
+        circle_mask = draw_contour(mask, contours, 0, color=paint_id, thick=thick)
+        circle_mask = draw_arrow(circle_mask, start, end, color=paint_id, thick=arrow_thick)
         if out_img:
-            cv2.imwrite(out_img, image)
+            cv2.imwrite(out_img, circle)
         if out_annot:
-            circle_mask = Image.fromarray(mask)
+            circle_mask = Image.fromarray(circle_mask)
             circle_mask.save(out_annot)
 
     def check_path(self):
@@ -161,45 +139,48 @@ def paint(img, out_img=None, out_annot=None):
     cv2.waitKey()
 
 
-def rand_paint(img, out_img=None, out_annot=None, color=None):
+def rand_paint(img, out_img=None, out_annot=None):
     image = cv2.imread(img)
     h, w, _ = image.shape
-    if color is None:
-        color = random_color()
     mask = np.zeros((h, w), dtype=np.uint8)
-    mask_cp = mask.copy()
+    color = random_color()
     center, radius, thick, contours = random_circle(h, w, return_axis=True)
     start, end, arrow_thick = random_arrow(h, w, center=center, radius=radius)
-
-    image = draw_contour(image, contours, 0, thick=thick)
-    mask = draw_contour(mask, contours, 0, color=128, thick=thick)
-
+    image_cp = np.zeros_like(image)
+    mask_cp = mask.copy()
+    cp_arrow = draw_arrow(image_cp, start, end, color=color, thick=arrow_thick)
     mask_cp = draw_arrow(mask_cp, start, end, color=128, thick=arrow_thick)
     idxs = np.where(mask_cp > 0)
     xmin, ymin = min(idxs[1]), min(idxs[0])
     xmax, ymax = max(idxs[1]), max(idxs[0])
 
-    crop_arrow = mask_cp[ymin:ymax, xmin:xmax]
+    crop_arrow = cp_arrow[ymin:ymax, xmin:xmax]
     crop_arrow = Image.fromarray(crop_arrow)
-    direction = np.random.randint(0, 2)
-    crop_arrow = piecewiseAffineTrans(crop_arrow, direction=direction)
+    crop_arrow = piecewiseAffineTrans(crop_arrow, direction=0)
+    crop_mask = np.mean(crop_arrow, axis=-1).astype(np.uint8)
 
-    y_id, x_id = np.where(crop_arrow > np.max(crop_arrow) - 30)
-    arrow_h, arrow_w = crop_arrow.shape
-    arrow = np.zeros_like(crop_arrow, shape=[arrow_h, arrow_w, 3])
-    arrow[(y_id, x_id)] = color
-
+    y_id, x_id = np.where(crop_mask > np.max(crop_mask) - 30)
+    crop_mask[(y_id, x_id)] = 128
     img_y, img_x = np.clip(y_id + ymin, 0, h - 1), np.clip(x_id + xmin, 0, w - 1)
 
     opacity = np.random.uniform(0.5, 1)
     # image[ymin:ymax, xmin:xmax] = opacity * crop_arrow + (1 - opacity) * image[ymin:ymax, xmin:xmax]
-    image[(img_y, img_x)] = opacity * arrow[(y_id, x_id)] + (1 - opacity) * image[(img_y, img_x)]
-    mask[(img_y, img_x)] = 128
-    cv2.imshow('image', image)
-    cv2.imshow("mask", mask)
+    image[(img_y, img_x)] = opacity * crop_arrow[(y_id, x_id)] + (1 - opacity) * image[(img_y, img_x)]
+    
+    cv2.imshow("debug", crop_mask)
+    cv2.imshow("image", image)
     cv2.waitKey()
 
+    # circle = draw_circle(image, center, radius, thick=thick)
+    # circle = draw_contour(image, contours, 0, thick=thick)
+    # circle = draw_arrow(circle, start, end, thick=arrow_thick)
+    # circle_mask = draw_contour(mask, contours, 0, color=128, thick=thick)
+    # circle_mask = draw_arrow(circle_mask, start, end, color=128, thick=arrow_thick)
+    # cv2.imshow('image', circle)
+    # cv2.imshow("mask", circle_mask)
+    # cv2.waitKey()
 
-# file = "../images/005633.jpg"
-# while True:
-#     rand_paint(file)
+
+file = "../images/005633.jpg"
+while True:
+    rand_paint(file)
