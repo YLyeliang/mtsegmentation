@@ -4,7 +4,8 @@
 
 from .fcn_head import FCNHead
 from .aspp_head import ASPPHead
+from .u2net_head import U2NetHead
 
 __all__ = [
-    'FCNHead', 'ASPPHead'
+    'FCNHead', 'ASPPHead', 'U2NetHead'
 ]

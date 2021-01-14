@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 
 class Mish(nn.Module):
@@ -12,11 +13,27 @@ class Mish(nn.Module):
         return x
 
 
+class Hard_sigmoid(nn.Module):
+    """A faster approximation of the sigmoid activation.
+    """
+
+    def __init__(self, inplace=False):
+        super().__init__()
+        self.inplace = inplace
+
+    def forward(self, x):
+        if self.inplace:
+            return x.add_(3.).clamp_(0., 6.).div_(6.)
+        else:
+            return F.relu6(x + 3.) / 6.
+
+
 act_cfg = {
     "ReLU": nn.ReLU,
     "ReLU6": nn.ReLU6,
     "LeakyReLU": nn.LeakyReLU,
-    "Mish": Mish
+    "Mish": Mish,
+    "Hard_sigmoid": Hard_sigmoid
 }
 
 

@@ -73,12 +73,17 @@ class DataPaint(object):
         h, w, _ = image.shape
         mask = np.zeros((h, w), dtype=np.uint8)
         mask_cp = mask.copy()
+        # generate circle and arrow coordinates and parameters.
         center, radius, thick, contours = random_circle(h, w, return_axis=True)
         start, end, arrow_thick = random_arrow(h, w, center=center, radius=radius)
 
+        # draw random circles
         image = draw_contour(image, contours, 0, thick=thick)
         mask = draw_contour(mask, contours, 0, color=paint_id, thick=thick)
 
+        # draw arrow on mask, and perform piecewiseAffinewarp on mask,
+        # and draw new colored mask according to the mask where value >0, which is the warped arrow.
+        # and paste the colored mask and mask on image and annotation.
         mask_cp = draw_arrow(mask_cp, start, end, color=128, thick=arrow_thick)
         idxs = np.where(mask_cp > 0)
         xmin, ymin = min(idxs[1]), min(idxs[0])
@@ -198,7 +203,6 @@ def rand_paint(img, out_img=None, out_annot=None, color=None):
     cv2.imshow('image', image)
     cv2.imshow("mask", mask)
     cv2.waitKey()
-
 
 # file = "../images/005633.jpg"
 # while True:
