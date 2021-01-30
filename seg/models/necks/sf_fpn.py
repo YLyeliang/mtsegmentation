@@ -165,6 +165,7 @@ class SFFPN(nn.Module):
 
     def forward(self, inputs):
         assert len(inputs) == len(self.in_channels)
+        inputs = list(inputs)
         inputs[-1] = self.ppm(inputs[-1])
 
         # build laterals
@@ -173,6 +174,7 @@ class SFFPN(nn.Module):
             for i, lateral_conv in enumerate(self.lateral_convs)
         ]
         laterals += [inputs[-1]]
+        fams = [inputs[-1]]
 
         # build top-down path
         used_backbone_levels = len(laterals)
@@ -183,7 +185,9 @@ class SFFPN(nn.Module):
                 laterals[i - 1] += F.interpolate(laterals[i],
                                                  **self.upsample_cfg)
             elif 'flow_align' in self.upsample_cfg:
-                laterals[i - 1] += self.fam_warps[i - 1]([laterals[i - 1], laterals[i]])
+                f_warp = self.fam_warps[i - 1]([laterals[i - 1], laterals[i]])
+                f_warp += laterals[i - 1]
+                fams += [f_warp]
             else:
                 prev_shape = laterals[i - 1].shape[2:]
                 laterals[i - 1] += F.interpolate(
