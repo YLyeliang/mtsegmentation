@@ -4,16 +4,15 @@ import os
 import os.path as osp
 import time
 
-import mmcv
+import mtcv
 import torch
-from mmcv.runner import init_dist
-from mmcv.utils import Config, DictAction, get_git_hash
+from mtcv.runner import init_dist
+from mtcv.utils import Config, DictAction
 
-from mmseg import __version__
-from mmseg.apis import set_random_seed, train_segmentor
-from mmseg.datasets import build_dataset
-from mmseg.models import build_segmentor
-from mmseg.utils import collect_env, get_root_logger
+from seg.apis import set_random_seed, train_segmentor
+from seg.datasets import build_dataset
+from seg.models import build_segmentor
+from seg.utils import collect_env, get_root_logger
 
 
 def parse_args():
@@ -95,7 +94,7 @@ def main():
         init_dist(args.launcher, **cfg.dist_params)
 
     # create work_dir
-    mmcv.mkdir_or_exist(osp.abspath(cfg.work_dir))
+    mtcv.mkdir_or_exist(osp.abspath(cfg.work_dir))
     # dump config
     cfg.dump(osp.join(cfg.work_dir, osp.basename(args.config)))
     # init the logger before other steps
@@ -138,10 +137,9 @@ def main():
         val_dataset.pipeline = cfg.data.train.pipeline
         datasets.append(build_dataset(val_dataset))
     if cfg.checkpoint_config is not None:
-        # save mmseg version, config file content and class names in
+        # save seg version, config file content and class names in
         # checkpoints as meta data
         cfg.checkpoint_config.meta = dict(
-            mmseg_version=f'{__version__}+{get_git_hash()[:7]}',
             config=cfg.pretty_text,
             CLASSES=datasets[0].CLASSES,
             PALETTE=datasets[0].PALETTE)
