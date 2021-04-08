@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*- 
-# @Time : 2021/3/3 2:52 下午 
+# @Time : 2021/3/3 2:52 下午
 # @Author : yl
 
 import math
@@ -12,7 +12,7 @@ from collections import OrderedDict
 from ..builder import BACKBONES
 from mtcv.runner import load_checkpoint
 from seg.utils import get_root_logger
-from mtcv.cnn import ConvModule, build_norm_layer
+from mtcv.cnn import ConvModule
 
 BatchNorm2d = nn.BatchNorm2d
 bn_mom = 0.1
@@ -27,8 +27,7 @@ def conv3x3(in_planes, out_planes, stride=1):
 class BasicBlock(nn.Module):
     expansion = 1
 
-    def __init__(self, inplanes, planes, stride=1, downsample=None, no_relu=False,
-                 norm_cfg=dict(type='BN', momentum=bn_mom)):
+    def __init__(self, inplanes, planes, stride=1, downsample=None, no_relu=False):
         super(BasicBlock, self).__init__()
         self.conv1 = conv3x3(inplanes, planes, stride)
         self.bn1 = BatchNorm2d(planes, momentum=bn_mom)
@@ -199,88 +198,98 @@ class DualResNet(nn.Module):
                  depth,
                  in_channels=3,
                  base_channels=64,
+                 planes=64,
                  spp_planes=128,
                  strides=[1, 2, 2, 2],
                  dilations=[1, 1, 1, 1],
                  bilateral_on_stage=[1, 1],
-                 norm_cfg=dict(type='BN', momentum=bn_mom),
-                 auxiliary=True):
+                 norm_cfg=dict(type="BN", momentum=bn_mom),
+                 augment=False):
         super(DualResNet, self).__init__()
 
         block, layers = self.arch_settings[depth]
         highres_planes = base_channels * 2
-        self.auxiliary = auxiliary
-        self.norm_cfg = norm_cfg
+        self.augment = augment
         self.bilateral_on_stage = bilateral_on_stage
 
         self.conv1 = nn.Sequential(
             nn.Conv2d(in_channels, base_channels, kernel_size=3, stride=2, padding=1),
-            build_norm_layer(norm_cfg, base_channels)[1],
+            BatchNorm2d(base_channels, momentum=bn_mom),
             nn.ReLU(inplace=True),
             nn.Conv2d(base_channels, base_channels, kernel_size=3, stride=2, padding=1),
-            build_norm_layer(norm_cfg, base_channels)[1],
+            BatchNorm2d(base_channels, momentum=bn_mom),
             nn.ReLU(inplace=True),
         )
-        self.relu = nn.ReLU(inplace=False)
 
         self.inplanes = base_channels
+        self.relu = nn.ReLU(inplace=False)
         self.layers = nn.ModuleList()
         self.compressions = nn.ModuleList()
         self.downs = nn.ModuleList()
         self.layers_ = nn.ModuleList()
-        for i, num_blocks in enumerate(layers):
+        for i in range(layers):
             planes = base_channels * 2 ** i  # 64 128 256 512
 
-            if i > 1:  # start from stage 3
-                highres_inplanes = base_channels * 2
+            if i > 1:
+                highres_inplanes = self.inplanes
 
-                # if bilateral_onstage[i-2]>1:
-                for j in range(bilateral_on_stage[i - 2]):
-                    # down-sample way
-                    res_layer = self._make_layer(block, self.inplanes, planes,
-                                                 num_blocks // bilateral_on_stage[i - 2],
-                                                 stride=strides[i])
-                    self.layers.append(res_layer)
-                    # layers on high-resolution
-                    layer_ = self._make_layer(block, highres_inplanes, highres_planes,
-                                              num_blocks // bilateral_on_stage[i - 2])
-                    highres_inplanes = highres_planes
-                    self.layers_.append(layer_)
+                if bilateral_on_stage[i - 2] > 1:
+                    for j in range(bilateral_on_stage[i - 2]):
+                        # down-sample way
+                        res_layer = self._make_layer(block, self.inplanes, planes,
+                                                     layers[i] // bilateral_on_stage[i - 2],
+                                                     stride=strides[i])
+                        self.layers.append(res_layer)
+                        # layers on high-resolution
+                        layer_ = self._make_layer(block, highres_inplanes, highres_planes,
+                                                  layers[i] // bilateral_on_stage[i - 2])
+                        highres_inplanes = highres_planes
+                        self.layers_.append(layer_)
 
-                    # bilateral up way
+                        # bilateral up way
+                        compression = nn.Sequential(nn.Conv2d(planes, highres_planes, kernel_size=1, bias=False),
+                                                    BatchNorm2d(highres_planes, momentum=bn_mom))
+                        self.compressions.append(compression)
+                        self.inplanes = planes * block.expansion
+                        strides[i] = 1  # first one with down-sample, next without
+
+                        # bilateral down way
+                        down_inplanes = highres_planes
+                        down_planes = planes // bilateral_on_stage[i - 2]
+                        down = nn.ModuleList()
+                        for k in range(i - 1):  # start from stage 3(i==2), to down-sample to 1/x from 1/8
+                            if k == i - 2:  # which means no relu on final layer
+                                conv_bn_act = ConvModule(down_inplanes, down_planes, kernel_size=3, stride=2, padding=1,
+                                                         norm_cfg=norm_cfg, act_cfg=None)
+                            else:
+                                conv_bn_act = ConvModule(down_inplanes, down_planes, kernel_size=3, stride=2, padding=1,
+                                                         norm_cfg=norm_cfg)
+                            down.append(conv_bn_act)
+                            down_inplanes = down_planes
+                            down_planes += down_planes
+                        down = nn.Sequential(down)
+                        self.downs.append(down)
+
+                else:
+                    res_layer = self._make_layer(block, self.inplanes, planes, layers[i], stride=strides[i])
                     compression = nn.Sequential(nn.Conv2d(planes, highres_planes, kernel_size=1, bias=False),
                                                 BatchNorm2d(highres_planes, momentum=bn_mom))
+                    self.layers.append(res_layer)
+                    self.layers_.append(self._make_layer(block, planes, highres_planes, layers[i]))
                     self.compressions.append(compression)
-                    self.inplanes = planes * block.expansion
-                    strides[i] = 1  # first one with down-sample, next without
 
-                    # bilateral down way
-                    down_inplanes = highres_planes
-                    down_planes = planes // 2 if i - 1 == 2 else planes  # stage 4 have 2 down-sample layer with each 2x-down
-                    down = nn.ModuleList()
-                    for k in range(i - 1):  # start from stage 3(i==2), down-sample to 1/x from 1/8
-                        if k == i - 2:  # which means no relu on final layer
-                            conv_bn_act = ConvModule(down_inplanes, down_planes, kernel_size=3, stride=2, padding=1,
-                                                     norm_cfg=norm_cfg, act_cfg=None)
-                        else:
-                            conv_bn_act = ConvModule(down_inplanes, down_planes, kernel_size=3, stride=2, padding=1,
-                                                     norm_cfg=norm_cfg)
-                        down.append(conv_bn_act)
-                        down_inplanes = down_planes
-                        down_planes += down_planes
-                    down = nn.Sequential(*down)
-                    self.downs.append(down)
+
             else:
-                res_layer = self._make_layer(block, self.inplanes, planes, num_blocks, stride=strides[i])
+                res_layer = self._make_layer(block, self.inplanes, planes, layers[i], stride=strides[i])
                 self.layers.append(res_layer)
 
             self.inplanes = planes * block.expansion
 
         self.layer5_ = self._make_layer(Bottleneck, highres_planes, highres_planes, 1)  # 128*2=256
 
-        self.layer5 = self._make_layer(Bottleneck, planes, planes, 1, stride=2)  # 512*2=1024
+        self.layer5 = self._make_layer(Bottleneck, planes * 8, planes * 8, 1, stride=2)  # 512*2=1024
 
-        self.spp = DAPPM(planes * 2, spp_planes, planes // 2)  # 1024 128 256
+        self.spp = DAPPM(planes * 16, spp_planes, planes * 4)  # 1024 128 256
 
         # if self.augment:
         #     self.seghead_extra = segmenthead(highres_planes, head_planes, num_classes)  # 128 128
@@ -291,6 +300,13 @@ class DualResNet(nn.Module):
         if isinstance(pretrained, str):
             logger = get_root_logger()
             load_checkpoint(self, pretrained, strict=False, logger=logger)
+        # if pretrained:
+        #     pretrained_state = torch.load(cfg.MODEL.PRETRAINED, map_location='cpu')
+        #     model_dict = model.state_dict()
+        #     pretrained_state = {k: v for k, v in pretrained_state.items() if
+        #                         (k in model_dict and v.shape == model_dict[k].shape)}
+        #     model_dict.update(pretrained_state)
+        #     model.load_state_dict(model_dict, strict=False)
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
                 nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
@@ -304,7 +320,7 @@ class DualResNet(nn.Module):
             downsample = nn.Sequential(
                 nn.Conv2d(inplanes, planes * block.expansion,
                           kernel_size=1, stride=stride, bias=False),
-                build_norm_layer(self.norm_cfg, planes * block.expansion)[1]
+                nn.BatchNorm2d(planes * block.expansion, momentum=bn_mom),
             )
 
         layers = []
@@ -322,41 +338,34 @@ class DualResNet(nn.Module):
         x = self.conv1(x)  # s 4
         auxiliary_layer = self.bilateral_on_stage[0] + 1
         outputs = []
+        for i, layer in enumerate(self.layers):
+            if i == 0:
+                x = layer(x)
+            elif i > 1:
+                x = layer(self.relu(x))
+                tmp_x = x
+                x_ = self.layers_[i - 2](self.relu(x))
+                x = x + self.downs[i - 2](self.relu(x_))
+                x_ = x_ + F.interpolate(self.compressions[i - 2](self.relu(tmp_x)),
+                                        size=x_.shape[-1:-3:-1],
+                                        mode='bilinear')
+                if i == auxiliary_layer:
+                    outputs.append(x_)
+            else:
+                x = layer(self.relu(x))
 
-        x = self.layers[0](x)  # s 4
-        x = self.layers[1](self.relu(x))  # 8
-        x_ = x
-        x = self.layers[2](self.relu(x))  # 16
-        x_later = x
-        x_ = self.layers_[0](self.relu(x_))  # 8
-        x = x + self.downs[0](self.relu(x_))  # 16
-        width_output = x_.shape[-1]
-        height_output = x_.shape[-2]
-        x_ = x_ + F.interpolate(self.compressions[0](self.relu(x_later)),
-                                size=[height_output, width_output],
-                                mode='bilinear')
-        if auxiliary_layer < 3: outputs.append(x_)  # ddr-23 append auxiliary layer now
-
-        for i in range(3, len(self.layers)):
-            x = self.layers[i](self.relu(x))
-            x_later = x
-            x_ = self.layers_[i - 2](self.relu(x_))
-            x = x + self.downs[i - 2](self.relu(x_))
-            x_ = x_ + F.interpolate(self.compressions[i - 2](self.relu(x_later)),
-                                    size=[height_output, width_output],
-                                    mode='bilinear')
-            if auxiliary_layer == i:  # ddr-39 append auxiliary layer now
-                outputs.append(x_)
+        if self.augment:  # features for auxiliary head
+            temp = self.relu(x_)
 
         x_ = self.layer5_(self.relu(x_))  # 8
         x = F.interpolate(  # up(dappm(rbb(x))) # 64 -> 8
             self.spp(self.layer5(self.relu(x))),
-            size=[height_output, width_output],
+            size=x_.shape[-1:-3:-1],
             mode='bilinear')
 
         output = self.relu(x + x_)
-
+        outputs.append(output)
         if self.augment:
-            return [temp, output]
+            return outputs
         else:
-            return [output]
+            return outputs

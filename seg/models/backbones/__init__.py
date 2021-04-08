@@ -4,7 +4,9 @@
 from .resnet import ResNet, ResNetV1c, ResNetV1d
 from .hrnet import HRNet
 from .u2net import U2Net
+from .dualresnet import DualResNet
+from .ghostnet import GhostNet
 
 __all__ = [
-    'ResNet', 'ResNetV1c', 'ResNetV1d', 'HRNet', 'U2Net'
+    'ResNet', 'ResNetV1c', 'ResNetV1d', 'HRNet', 'U2Net', 'DualResNet', 'GhostNet'
 ]
